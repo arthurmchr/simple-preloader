@@ -17,6 +17,8 @@ export default class SimplePreloader {
 
 	fileLoadedHandler(res, el) {
 
+		el.worker.terminate();
+
 		el.isLoading = false;
 		el.blobUrl = window.URL.createObjectURL(res);
 
@@ -105,7 +107,7 @@ export default class SimplePreloader {
 		let being = limit;
 
 		function xhrFunc(event) {
-			console.log(this);
+
 			switch (event.data.type) {
 
 				case 'onload':
