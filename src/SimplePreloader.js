@@ -1,48 +1,36 @@
-const _ = new WeakMap();
+const fs = require('fs');
 
 export default class SimplePreloader {
 
 	constructor({
+		concurent = 6,
+		headers = false,
 		onComplete = null,
 		onProgress = null
 	} = {}) {
 
-		_.set(this, {
-			concurent: 6,
-			onComplete,
-			onProgress,
-			queue: []
-		});
+		this.xhrFunc = this.xhrFunc.bind(this);
+
+		this._concurent = concurent;
+		this._headers = headers;
+		this._onComplete = onComplete;
+		this._onProgress = onProgress;
+
+		this._queue = [];
+
+		this._inlineBlob = URL.createObjectURL(new Blob([fs.readFileSync(`${__dirname}/worker.js`, 'utf8')], {type: 'application/javascript'}));
 	}
 
-	fileLoadedHandler(res, el) {
+	add(paths) {
 
-		el.worker.terminate();
+		if (Array.isArray(paths)) {
 
-		el.isLoading = false;
-		el.blobUrl = window.URL.createObjectURL(res);
+			for (const el of paths) {
 
-		const status = this.getStatus(el.group);
-
-		if (status.notStarted) this.startDownload(el.group, 1);
-		else if (!status.notFinished && _.get(this).onComplete) _.get(this).onComplete();
-	}
-
-	getStatus(group) {
-
-		let notStarted = 0;
-		let notFinished = 0;
-
-		for (const el of this.getGroupQueue(group)) {
-
-			if (!el.isLoading && !el.blobUrl) notStarted++;
-			else if (el.isLoading) notFinished++;
+				this.addToQueue(el);
+			}
 		}
-
-		return {
-			notStarted,
-			notFinished
-		};
+		else this.addToQueue(paths);
 	}
 
 	addToQueue(file) {
@@ -63,24 +51,18 @@ export default class SimplePreloader {
 		if (!item.id) item.id = item.url;
 
 		item.isLoading = false;
-		item.downloadedSize = 0;
+		item.progress = null;
 		item.totalSize = 0;
 		item.blobUrl = null;
 
-		_.get(this).queue.push(item);
+		this._queue.push(item);
 	}
 
-	filterByGroup(group) {
+	start(group) {
 
-		return function(el) {
+		if (this._headers) this.getHeaders(group);
 
-			return el.group === group;
-		};
-	}
-
-	getGroupQueue(group) {
-
-		return group ? _.get(this).queue.filter(this.filterByGroup(group)) : _.get(this).queue;
+		this.startDownload(group);
 	}
 
 	getHeaders(group) {
@@ -101,73 +83,111 @@ export default class SimplePreloader {
 		}
 	}
 
-	startDownload(group = null, limit = _.get(this).concurent) {
+	getGroupQueue(group) {
+
+		return group ? this._queue.filter(this.filterByGroup(group)) : this._queue;
+	}
+
+	filterByGroup(group) {
+
+		return function(el) {
+
+			return el.group === group;
+		};
+	}
+
+	startDownload(group = null, limit = this._concurent) {
 
 		const newQueue = this.getGroupQueue(group);
 		let being = limit;
-
-		function xhrFunc(event) {
-
-			switch (event.data.type) {
-
-				case 'onload':
-					this.fileLoadedHandler(event.data.res, event.data.el);
-					break;
-
-				case 'onprogress':
-					event.data.el.downloadedSize = event.data.loaded;
-
-					if (_.get(this).onProgress) _.get(this).onProgress();
-					break;
-			}
-		}
 
 		for (let i = 0; i < newQueue.length; i++) {
 
 			const el = newQueue[i];
 
-			if (el.isLoading) continue;
+			if (el.isLoading || el.blobUrl) continue;
 
-			const worker = new Worker('worker.js');
+			const worker = new Worker(this._inlineBlob);
 
-			worker.addEventListener('message', xhrFunc);
+			worker.addEventListener('message', this.xhrFunc);
 
 			el.isLoading = true;
 			el.worker = worker;
 
 			worker.postMessage({
 				type: 'start',
-				el
+				el: {
+					id: el.id,
+					url: el.url
+				}
 			});
 
 			being--;
 
-			if (!being) return;
+			if (being === 0) return;
 		}
 	}
 
-	add(paths) {
+	xhrFunc(event) {
 
-		if (Array.isArray(paths)) {
+		const el = this.getElById(event.data.el.id);
 
-			for (const el of paths) {
+		switch (event.data.type) {
 
-				this.addToQueue(el);
-			}
+			case 'onload':
+				this.fileLoadedHandler(event.data.res, el);
+				break;
+
+			case 'onprogress':
+				el.progress = event.data.progress;
+
+				if (this._onProgress) this._onProgress(event.data.progress);
+				break;
 		}
-		else this.addToQueue(paths);
 	}
 
-	start(group) {
+	getElById(id) {
 
-		this.getHeaders(group);
+		for (const el of this._queue) {
 
-		this.startDownload(group);
+			if (el.id === id) return el;
+		}
+	}
+
+	fileLoadedHandler(res, el) {
+
+		el.worker.terminate();
+		delete el.worker;
+
+		el.isLoading = false;
+		el.blobUrl = URL.createObjectURL(new Blob([event.data.res], {type: 'image/jpeg'}));
+
+		const status = this.getStatus(el.group);
+
+		if (status.notStarted) this.startDownload(el.group, 1);
+		else if (!status.notFinished && this._onComplete) this._onComplete(el);
+	}
+
+	getStatus(group) {
+
+		let notStarted = 0;
+		let notFinished = 0;
+
+		for (const el of this.getGroupQueue(group)) {
+
+			if (!el.isLoading && !el.blobUrl) notStarted++;
+			else if (el.isLoading) notFinished++;
+		}
+
+		return {
+			notStarted,
+			notFinished
+		};
 	}
 
 	stop() {
 
-		for (const el of _.get(this).queue) {
+		for (const el of this._queue) {
 
 			if (el.isLoading) {
 
@@ -175,27 +195,43 @@ export default class SimplePreloader {
 					type: 'stop'
 				});
 
+				el.worker.terminate();
+				delete el.worker;
+
 				el.isLoading = false;
+				el.progress = null;
 			}
 		}
 	}
 
-	revoke(id, group) {
+	getResult(id) {
 
-		for (let i = 0; i < _.get(this).queue.length; i++) {
+		const blob = this.getElById(id).blobUrl;
 
-			const el = _.get(this).queue[i];
-
-			if (!el.blobUrl) continue;
-
-			if (el.id === id && !group) {
-
-				return window.URL.revokeObjectURL(el.blobUrl);
-			}
-			else if (group && el.group === id) {
-
-				window.URL.revokeObjectURL(el.blobUrl);
-			}
-		}
+		return blob;
 	}
+
+	// revoke(id, group) {
+
+	// 	for (let i = 0; i < this._queue.length; i++) {
+
+	// 		const el = this._queue[i];
+
+	// 		if (!el.blobUrl) continue;
+
+	// 		if (el.id === id && !group) {
+
+	// 			return window.URL.revokeObjectURL(el.blobUrl);
+	// 		}
+	// 		else if (group && el.group === id) {
+
+	// 			window.URL.revokeObjectURL(el.blobUrl);
+	// 		}
+	// 	}
+	// }
+
+	// destroy() {
+
+
+	// }
 }

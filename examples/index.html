@@ -1,0 +1,49 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<meta http-equiv="x-ua-compatible" content="ie=edge">
+		<title>Lib starter</title>
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+	</head>
+	<body>
+		<script src="../dist/simple-preloader.js"></script>
+
+		<script>
+			var queue = new SimplePreloader.default({
+				onProgress: function(event) {
+
+					console.log('cb progress', event.val);
+				},
+				onComplete: function(el) {
+
+					console.log('cb complete', el);
+				}
+			});
+
+			var absPath = window.location.origin + '/examples/';
+
+			queue.add([
+				{
+					url: absPath + 'background1.jpg'
+				},
+				absPath + 'background2.jpg',
+				absPath + 'background3.jpg',
+				absPath + 'background4.jpg',
+				{
+					group: 'test',
+					url: absPath + 'background5.jpg'
+				},
+				absPath + 'background6.jpg',
+				absPath + 'background7.jpg',
+				absPath + 'background8.jpg',
+				absPath + 'background9.jpg',
+				absPath + 'background10.jpg'
+			]);
+
+			queue.start('test');
+			queue.stop();
+			queue.start('test');
+		</script>
+	</body>
+</html>

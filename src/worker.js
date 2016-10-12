@@ -4,14 +4,21 @@ self.addEventListener('message', (event)=> {
 
 		self.xhr = new XMLHttpRequest();
 		self.xhr.open('GET', event.data.el.url);
+		self.xhr.responseType = 'arraybuffer';
 
-		self.xhr.onload = (res)=> {
+		self.xhr.onload = ()=> {
 
-			self.postMessage({
-				type: 'onload',
-				res,
-				el: event.data.el
-			});
+			if (self.xhr.readyState === self.xhr.DONE) {
+
+				if (self.xhr.status === 200) {
+
+					self.postMessage({
+						type: 'onload',
+						res: self.xhr.response,
+						el: event.data.el
+					});
+				}
+			}
 
 			close();
 		};
@@ -20,10 +27,16 @@ self.addEventListener('message', (event)=> {
 
 			self.postMessage({
 				type: 'onprogress',
-				loaded: eventProgress.loaded,
+				progress: {
+					loaded: eventProgress.loaded,
+					total: eventProgress.total,
+					val: eventProgress.loaded / eventProgress.total
+				},
 				el: event.data.el
 			});
 		};
+
+		self.xhr.send();
 	}
 	else if (event.data.type === 'stop') {
 
