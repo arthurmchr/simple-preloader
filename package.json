@@ -1,7 +1,7 @@
 {
   "name": "simple-preloader",
-  "version": "0.1.0",
-  "description": "Simple non blocking preloader that used web workers and give blob URL as results. Groups are supported.",
+  "version": "0.0.0",
+  "description": "Simple non blocking preloader that used web workers and give BLOB URLs as results. Groups are supported.",
   "author": "Arthur Muchir <arthur.muchir@gmail.com>",
   "license": "MIT",
   "main" : "dist/simple-preloader.js",
@@ -17,12 +17,18 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/arthurmuchir/moon.git"
+    "url": "https://github.com/arthurmuchir/simple-preloader"
   },
   "bugs": {
-    "url": "https://github.com/arthurmuchir/moon/issues"
+    "url": "https://github.com/arthurmuchir/simple-preloader/issues"
   },
-  "keywords": [],
+  "keywords": [
+    "Preloader",
+    "Preloading",
+    "BLOB",
+    "Web workers",
+    "Group"
+  ],
   "browserify-shim": {},
   "devDependencies": {
     "babel-preset-es2015": "6.16.0",

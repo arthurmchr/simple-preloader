@@ -17,7 +17,7 @@
 				},
 				onComplete: function(el) {
 
-					console.log('cb complete', el);
+					console.log('cb complete');
 				}
 			});
 
@@ -38,12 +38,11 @@
 				absPath + 'background7.jpg',
 				absPath + 'background8.jpg',
 				absPath + 'background9.jpg',
-				absPath + 'background10.jpg'
+				absPath + 'background10.jpg',
+				absPath + 'file.json'
 			]);
 
-			queue.start('test');
-			queue.stop();
-			queue.start('test');
+			queue.start();
 		</script>
 	</body>
 </html>

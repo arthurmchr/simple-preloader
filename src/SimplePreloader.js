@@ -17,6 +17,7 @@ export default class SimplePreloader {
 		this._onProgress = onProgress;
 
 		this._queue = [];
+		this._group = null;
 
 		this._inlineBlob = URL.createObjectURL(new Blob([fs.readFileSync(`${__dirname}/worker.js`, 'utf8')], {type: 'application/javascript'}));
 	}
@@ -50,6 +51,12 @@ export default class SimplePreloader {
 
 		if (!item.id) item.id = item.url;
 
+		if (!item.type) {
+
+			const ext = item.url.split('.');
+			item.type = ext.length > 1 ? ext.pop() : null;
+		}
+
 		item.isLoading = false;
 		item.progress = null;
 		item.totalSize = 0;
@@ -59,6 +66,8 @@ export default class SimplePreloader {
 	}
 
 	start(group) {
+
+		this._group = group;
 
 		if (this._headers) this.getHeaders(group);
 
@@ -118,7 +127,8 @@ export default class SimplePreloader {
 				type: 'start',
 				el: {
 					id: el.id,
-					url: el.url
+					url: el.url,
+					type: el.type
 				}
 			});
 
@@ -157,15 +167,47 @@ export default class SimplePreloader {
 	fileLoadedHandler(res, el) {
 
 		el.worker.terminate();
-		delete el.worker;
 
 		el.isLoading = false;
-		el.blobUrl = URL.createObjectURL(new Blob([event.data.res], {type: 'image/jpeg'}));
 
-		const status = this.getStatus(el.group);
+		if (el.type === 'json') {
 
-		if (status.notStarted) this.startDownload(el.group, 1);
-		else if (!status.notFinished && this._onComplete) this._onComplete(el);
+			el.blobUrl = event.data.res;
+		}
+		else {
+
+			let mimetype = '';
+
+			switch (el.type) {
+
+				case 'jpg':
+					mimetype = 'image/jpeg';
+					break;
+
+				case 'png':
+					mimetype = 'image/png';
+					break;
+
+				case 'mp3':
+					mimetype = 'audio/mpeg';
+					break;
+
+				case 'webm':
+					mimetype = 'video/webm';
+					break;
+
+				case 'mp4':
+					mimetype = 'video/mp4';
+					break;
+			}
+
+			el.blobUrl = URL.createObjectURL(new Blob([event.data.res], {type: mimetype}));
+		}
+
+		const status = this.getStatus(this._group);
+
+		if (status.notStarted) this.startDownload(this._group, 1);
+		else if (status.notStarted === 0 && status.notFinished === 0 && this._onComplete) this._onComplete();
 	}
 
 	getStatus(group) {
@@ -196,7 +238,6 @@ export default class SimplePreloader {
 				});
 
 				el.worker.terminate();
-				delete el.worker;
 
 				el.isLoading = false;
 				el.progress = null;
@@ -206,32 +247,36 @@ export default class SimplePreloader {
 
 	getResult(id) {
 
-		const blob = this.getElById(id).blobUrl;
-
-		return blob;
+		return this.getElById(id).blobUrl;
 	}
 
-	// revoke(id, group) {
+	revoke(id, group) {
 
-	// 	for (let i = 0; i < this._queue.length; i++) {
+		for (const el of this._queue) {
 
-	// 		const el = this._queue[i];
+			// if not the correct id or group
 
-	// 		if (!el.blobUrl) continue;
+			if (id && el.id !== id || group && el.group !== group) continue;
 
-	// 		if (el.id === id && !group) {
+			// if no blob or json typed
 
-	// 			return window.URL.revokeObjectURL(el.blobUrl);
-	// 		}
-	// 		else if (group && el.group === id) {
+			if (!el.blobUrl || el.type === 'json') {
 
-	// 			window.URL.revokeObjectURL(el.blobUrl);
-	// 		}
-	// 	}
-	// }
+				// if id we stop loop
 
-	// destroy() {
+				if (id) return;
 
+				continue;
+			}
 
-	// }
+			if (id) return window.URL.revokeObjectURL(el.blobUrl);
+			else window.URL.revokeObjectURL(el.blobUrl);
+		}
+	}
+
+	destroy() {
+
+		this.stop();
+		this.revoke();
+	}
 }

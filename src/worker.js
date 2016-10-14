@@ -4,7 +4,7 @@ self.addEventListener('message', (event)=> {
 
 		self.xhr = new XMLHttpRequest();
 		self.xhr.open('GET', event.data.el.url);
-		self.xhr.responseType = 'arraybuffer';
+		self.xhr.responseType = event.data.type === 'json' ? 'json' : 'arraybuffer';
 
 		self.xhr.onload = ()=> {
 
@@ -14,7 +14,7 @@ self.addEventListener('message', (event)=> {
 
 					self.postMessage({
 						type: 'onload',
-						res: self.xhr.response,
+						res: event.data.type === 'json' ? self.xhr.responseText : self.xhr.response,
 						el: event.data.el
 					});
 				}
