@@ -4,20 +4,22 @@ export default class SimplePreloader {
 
 	constructor({
 		concurent = 6,
-		headers = false,
 		onComplete = null,
+		onFileLoaded = null,
 		onProgress = null
 	} = {}) {
 
 		this.xhrFunc = this.xhrFunc.bind(this);
 
 		this._concurent = concurent;
-		this._headers = headers;
 		this._onComplete = onComplete;
+		this._onFileLoaded = onFileLoaded;
 		this._onProgress = onProgress;
 
 		this._queue = [];
 		this._group = null;
+		this._totalProgress = 0;
+		this._totalSize = 0;
 
 		this._inlineBlob = URL.createObjectURL(new Blob([fs.readFileSync(`${__dirname}/worker.js`, 'utf8')], {type: 'application/javascript'}));
 	}
@@ -32,6 +34,8 @@ export default class SimplePreloader {
 			}
 		}
 		else this.addToQueue(paths);
+
+		return this;
 	}
 
 	addToQueue(file) {
@@ -58,23 +62,35 @@ export default class SimplePreloader {
 		}
 
 		item.isLoading = false;
-		item.progress = null;
 		item.totalSize = 0;
 		item.blobUrl = null;
 
 		this._queue.push(item);
 	}
 
-	start(group) {
+	start(cb, group) {
+
+		if (cb) this._onComplete = cb;
 
 		this._group = group;
 
-		if (this._headers) this.getHeaders(group);
+		this.getHeaders(group);
 
 		this.startDownload(group);
 	}
 
+	isFileLoaded(file) {
+
+		if (Array.isArray(file)) for (const el of file) if (!this.getResult(el.id || el.url || el)) return false;
+
+		if (!this.getResult(file.id || file.url || file)) return false;
+
+		return true;
+	}
+
 	getHeaders(group) {
+
+		this._totalSize = 0;
 
 		for (const el of this.getGroupQueue(group)) {
 
@@ -86,6 +102,7 @@ export default class SimplePreloader {
 			xhr.onload = ()=> {
 
 				el.totalSize = xhr.getResponseHeader('Content-Length');
+				this._totalSize += el.totalSize;
 			};
 
 			xhr.send();
@@ -145,23 +162,20 @@ export default class SimplePreloader {
 		switch (event.data.type) {
 
 			case 'onload':
+				this._totalProgress += el.totalSize;
 				this.fileLoadedHandler(event.data.res, el);
 				break;
 
 			case 'onprogress':
-				el.progress = event.data.progress;
 
-				if (this._onProgress) this._onProgress(event.data.progress);
+				if (this._onProgress) this._onProgress(this._totalProgress + event.data.progress, this._totalSize);
 				break;
 		}
 	}
 
 	getElById(id) {
 
-		for (const el of this._queue) {
-
-			if (el.id === id) return el;
-		}
+		for (const el of this._queue) if (el.id === id) return el;
 	}
 
 	fileLoadedHandler(res, el) {
@@ -204,6 +218,8 @@ export default class SimplePreloader {
 			el.blobUrl = URL.createObjectURL(new Blob([event.data.res], {type: mimetype}));
 		}
 
+		if (this._onFileLoaded) this._onFileLoaded(el);
+
 		const status = this.getStatus(this._group);
 
 		if (status.notStarted) this.startDownload(this._group, 1);
@@ -240,7 +256,6 @@ export default class SimplePreloader {
 				el.worker.terminate();
 
 				el.isLoading = false;
-				el.progress = null;
 			}
 		}
 	}
@@ -278,5 +293,15 @@ export default class SimplePreloader {
 
 		this.stop();
 		this.revoke();
+	}
+
+	set onFileLoaded(fn) {
+
+		this._onFileLoaded = fn;
+	}
+
+	set onProgress(fn) {
+
+		this._onProgress = fn;
 	}
 }

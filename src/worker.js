@@ -27,11 +27,7 @@ self.addEventListener('message', (event)=> {
 
 			self.postMessage({
 				type: 'onprogress',
-				progress: {
-					loaded: eventProgress.loaded,
-					total: eventProgress.total,
-					val: eventProgress.loaded / eventProgress.total
-				},
+				progress: eventProgress.loaded / eventProgress.total,
 				el: event.data.el
 			});
 		};
